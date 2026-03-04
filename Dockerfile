@@ -17,5 +17,11 @@ RUN chmod +x main.py
 # We use /tmp for all writes, so this works perfectly
 USER 1000
 
+EXPOSE 3000
+EXPOSE 769
+EXPOSE 80
+EXPOSE 443
+
+
 # Start the wrapper
 CMD ["python3", "main.py"]
