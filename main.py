@@ -1,28 +1,25 @@
-import subprocess
 import os
-import time
+import shutil
+import subprocess
+import stat
 
-# The cloud service usually gives you ONE port via an environment variable
-public_port = os.environ.get("PORT", "3000") 
+# 1. Define paths
+source_binary = "TCli"           # Where the file is in your upload
+target_binary = "/tmp/TCli"      # The only writable spot
 
-def run_server():
-    binary_path = "./TCli"
-    
-    # Ensure it is executable
-    os.chmod(binary_path, 0o755)
+# 2. Copy the binary to /tmp
+try:
+    shutil.copy2(source_binary, target_binary)
+    print(f"Successfully moved binary to {target_binary}")
+except Exception as e:
+    print(f"Error moving file: {e}")
 
-    print(f"Starting TCli server")
-    
-    # Start the process
-    process = subprocess.Popen([binary_path, "start", "accept", "--token", "B8oXaAifqOPw+Sv6NexjzSqmuhw6a2DATWdjCh942R8=", public_port])
+# 3. Grant execution permissions (Crucial!)
+os.chmod(target_binary, stat.S_IRWXU) # Gives Read, Write, and Execute to the user
 
-    while True:
-        # Check if the process is still running
-        if process.poll() is not None:
-            print("TCli Server crashed! Restarting...")
-            process = subprocess.Popen([binary_path, "start", "accept", "--token", "B8oXaAifqOPw+Sv6NexjzSqmuhw6a2DATWdjCh942R8=", public_port])
-        
-        time.sleep(10) # Check status every 10 seconds
-
-if __name__ == "__main__":
-    run_server()
+# 4. Run it from the new location
+try:
+    process = subprocess.Popen([target_binary, "start", "accept", "--token", "B8oXaAifqOPw+Sv6NexjzSqmuhw6a2DATWdjCh942R8=", "3000"])
+    print("Server is running from /tmp")
+except Exception as e:
+    print(f"Execution failed: {e}")
