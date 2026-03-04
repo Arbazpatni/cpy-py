@@ -4,45 +4,73 @@ import subprocess
 import platform
 import stat
 import time
+import sys
 
 def deploy_and_run():
     # 1. Architecture Detection
     arch = platform.machine().lower()
-    source_name = "TCli_arm" if ("arm" in arch or "aarch64" in arch) else "TCli"
-    
-    # 2. Setup Writable Paths
+    if "arm" in arch or "aarch64" in arch:
+        source_name = "TCli_arm"
+    elif "x86" in arch or "amd64" in arch:
+        source_name = "TCli"
+    else:
+        print(f"Unsupported architecture: {arch}")
+        sys.exit(1)
+
+    # 2. Setup Writable Working Directory
+    # We use /tmp to ensure it works even on read-only filesystems
     base_tmp = "/tmp/tmon"
     target_binary = os.path.join(base_tmp, source_name)
     
     if not os.path.exists(base_tmp):
-        os.makedirs(base_tmp)
+        os.makedirs(base_tmp, exist_ok=True)
 
     # 3. Copy & Permissions
     try:
-        shutil.copy2(source_name, target_binary)
-        os.chmod(target_binary, 0o777) 
-        print(f"Ready: {target_binary} on {arch}")
+        if os.path.exists(source_name):
+            shutil.copy2(source_name, target_binary)
+            # Mark as executable: rwx------
+            os.chmod(target_binary, stat.S_IRWXU)
+            print(f"--- Environment Ready ---")
+            print(f"Arch: {arch} | Binary: {target_binary}")
+        else:
+            print(f"Error: {source_name} not found in current directory.")
+            sys.exit(1)
     except Exception as e:
         print(f"Setup Error: {e}")
-        return
+        sys.exit(1)
 
-    # 4. The Command
-    cmd = [target_binary, "start", "accept", "--token", "B8oXaAifqOPw+Sv6NexjzSqmuhw6a2DATWdjCh942R8="]
+    # 4. Execution Configuration
+    # It's better to get the token from an Environment Variable for Docker
+    token = os.environ.get("TOKEN", "B8oXaAifqOPw+Sv6NexjzSqmuhw6a2DATWdjCh942R8=")
+    cmd = [target_binary, "start", "accept", "--token", token]
 
+    # 5. Continuous Restart Loop
     while True:
-        print(f"Starting {source_name} at {time.ctime()}...")
+        print(f"\n[{time.ctime()}] Launching {source_name}...")
         try:
-            # We set 'cwd' so it writes logs/configs to /tmp
-            # We set 'HOME' so it doesn't try to use /root or /home/user
+            # Set HOME and CWD to /tmp so the C program can write its config/logs
             env_vars = dict(os.environ, HOME=base_tmp, XDG_CONFIG_HOME=base_tmp)
             
-            process = subprocess.Popen(cmd, cwd=base_tmp, env=env_vars)
+            process = subprocess.Popen(
+                cmd, 
+                cwd=base_tmp, 
+                env=env_vars,
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.STDOUT,
+                text=True
+            )
+
+            # Stream the output to the Docker logs
+            for line in process.stdout:
+                print(f"[TCli]: {line.strip()}")
+            
             process.wait()
-            print("Process stopped. Restarting...")
+            print(f"Process exited with code {process.returncode}. Restarting...")
         except Exception as e:
             print(f"Runtime Error: {e}")
         
-        time.sleep(15)
+        time.sleep(10)
 
 if __name__ == "__main__":
     deploy_and_run()
