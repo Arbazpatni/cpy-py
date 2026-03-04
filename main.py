@@ -5,52 +5,44 @@ import platform
 import stat
 import time
 
-def get_binary():
-    """Detects CPU architecture and returns the matching filename."""
-    arch = platform.machine().lower()
-    
-    if "arm" in arch or "aarch64" in arch:
-        print(f"Detected ARM architecture: {arch}")
-        return "TCli_arm"
-    elif "x86" in arch or "amd64" in arch:
-        print(f"Detected x86_64 architecture: {arch}")
-        return "TCli"  # Your original x86_64 file
-    else:
-        raise RuntimeError(f"Unsupported architecture: {arch}")
-
 def deploy_and_run():
-    source_name = get_binary()
-    target_path = os.path.join("/tmp", source_name)
+    # 1. Architecture Detection
+    arch = platform.machine().lower()
+    source_name = "TCli_arm" if ("arm" in arch or "aarch64" in arch) else "TCli"
     
-    # 1. Check if the source file actually exists in your upload
-    if not os.path.exists(source_name):
-        print(f"Error: Source file {source_name} not found in the app directory!")
-        return
+    # 2. Setup Writable Paths
+    base_tmp = "/tmp/tmon"
+    target_binary = os.path.join(base_tmp, source_name)
+    
+    if not os.path.exists(base_tmp):
+        os.makedirs(base_tmp)
 
-    # 2. Copy to /tmp to bypass Read-Only Filesystem
+    # 3. Copy & Permissions
     try:
-        shutil.copy2(source_name, target_path)
-        # Grant Read/Write/Execute permissions
-        os.chmod(target_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
-        print(f"Binary deployed to {target_path}")
+        shutil.copy2(source_name, target_binary)
+        os.chmod(target_binary, 0o777) 
+        print(f"Ready: {target_binary} on {arch}")
     except Exception as e:
-        print(f"Failed to copy binary: {e}")
+        print(f"Setup Error: {e}")
         return
 
-    # 3. Continuous Execution Loop
-    cmd = [target_path, "start", "accept", "--token", "B8oXaAifqOPw+Sv6NexjzSqmuhw6a2DATWdjCh942R8="]
-    
+    # 4. The Command
+    cmd = [target_binary, "start", "accept", "--token", "B8oXaAifqOPw+Sv6NexjzSqmuhw6a2DATWdjCh942R8="]
+
     while True:
-        print(f"Launching {source_name}...")
+        print(f"Starting {source_name} at {time.ctime()}...")
         try:
-            # We use .wait() to keep the Python script alive while the C app runs
-            process = subprocess.Popen(cmd)
-            process.wait() 
-            print("Process exited. Restarting in 10 seconds...")
+            # We set 'cwd' so it writes logs/configs to /tmp
+            # We set 'HOME' so it doesn't try to use /root or /home/user
+            env_vars = dict(os.environ, HOME=base_tmp, XDG_CONFIG_HOME=base_tmp)
+            
+            process = subprocess.Popen(cmd, cwd=base_tmp, env=env_vars)
+            process.wait()
+            print("Process stopped. Restarting...")
         except Exception as e:
-            print(f"Execution error: {e}")
+            print(f"Runtime Error: {e}")
         
-        time.sleep(10)
+        time.sleep(15)
 
 if __name__ == "__main__":
     deploy_and_run()
