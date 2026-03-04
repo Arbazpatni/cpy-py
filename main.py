@@ -1,10 +1,25 @@
+import sys
 import os
 import shutil
 import subprocess
 import platform
 import stat
 import time
-import sys
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+# --- 1. Tiny Web Server to satisfy Back4app Health Checks ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+def run_health_server(port):
+    server = HTTPServer(('0.0.0.0', int(port)), HealthCheckHandler)
+    print(f"Health check server started on port {port}")
+    server.serve_forever()
+
 
 def deploy_and_run():
     # 1. Architecture Detection
@@ -39,6 +54,11 @@ def deploy_and_run():
     except Exception as e:
         print(f"Setup Error: {e}")
         sys.exit(1)
+
+    # 3.1. Start Health Check in a background thread
+    # This tells Back4app: "Yes, I am listening on the port you want!"
+    assigned_port = os.environ.get("PORT", "3001")
+    threading.Thread(target=run_health_server, args=(assigned_port,), daemon=True).start()
 
     # 4. Execution Configuration
     # It's better to get the token from an Environment Variable for Docker
