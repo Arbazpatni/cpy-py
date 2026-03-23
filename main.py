@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import sys
 import os
 import shutil
@@ -25,35 +26,13 @@ def deploy_and_run():
     # 1. Architecture Detection
     arch = platform.machine().lower()
     if "arm" in arch or "aarch64" in arch:
-        source_name = "TCli_arm"
+        source_name = "/home/ec2-user/cpy-py/TCli_arm"
     elif "x86" in arch or "amd64" in arch:
-        source_name = "TCli"
+        source_name = "/home/ec2-user/cpy-py/TCli"
     else:
         print(f"Unsupported architecture: {arch}")
         sys.exit(1)
-
-    # 2. Setup Writable Working Directory
-    # We use /tmp to ensure it works even on read-only filesystems
-    base_tmp = "/tmp/tmon"
-    target_binary = os.path.join(base_tmp, source_name)
-    
-    if not os.path.exists(base_tmp):
-        os.makedirs(base_tmp, exist_ok=True)
-
-    # 3. Copy & Permissions
-    try:
-        if os.path.exists(source_name):
-            shutil.copy2(source_name, target_binary)
-            # Mark as executable: rwx------
-            os.chmod(target_binary, stat.S_IRWXU)
-            print(f"--- Environment Ready ---")
-            print(f"Arch: {arch} | Binary: {target_binary}")
-        else:
-            print(f"Error: {source_name} not found in current directory.")
-            sys.exit(1)
-    except Exception as e:
-        print(f"Setup Error: {e}")
-        sys.exit(1)
+    target_binary=source_name
 
     # 3.1. Start Health Check in a background thread
     # This tells Back4app: "Yes, I am listening on the port you want!"
@@ -69,13 +48,9 @@ def deploy_and_run():
     while True:
         print(f"\n[{time.ctime()}] Launching {source_name}...")
         try:
-            # Set HOME and CWD to /tmp so the C program can write its config/logs
-            env_vars = dict(os.environ, HOME=base_tmp, XDG_CONFIG_HOME=base_tmp)
             
             process = subprocess.Popen(
                 cmd, 
-                cwd=base_tmp, 
-                env=env_vars,
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.STDOUT,
                 text=True

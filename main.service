@@ -1,0 +1,16 @@
+[Unit]
+Description=Cpy-Py
+Target=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user
+ExecStart=/home/ec2-user/cpy-py/main.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/main.log
+StandardError=append:/var/log/main_error.log
+
+[Install]
+WantedBy=multi-user.target
